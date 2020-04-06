@@ -16,7 +16,7 @@ from util import print_error_exit
 # CLI
 __VERSION__ = "0.4.9b5"
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(
         description=f"sgrep CLI. For more information about sgrep, go to {SGREP_URL}",
         prog="sgrep",  # we have to lie to the user since they know of this as `sgrep`
@@ -178,3 +178,6 @@ if __name__ == "__main__":
         print_error_exit(
             f"sgrep encountered an error: {ex}; this is not your fault. {PLEASE_FILE_ISSUE_TEXT}"
         )
+
+if __name__ == "__main__":
+    main()
