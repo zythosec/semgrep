@@ -53,7 +53,7 @@ MISSING_RULE_ID = "no-rule-id"
 # Exit codes
 FINDINGS_EXIT_CODE = 1
 
-SGREP_PATH = "sgrep"
+SGREP_PATH = "sgrep-ocaml"
 
 # helper functions
 
