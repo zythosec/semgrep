@@ -20,4 +20,4 @@ jobs:
         uses: actions/checkout@v2
       - name: Download release info
         #run: curl https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.get_version.outputs.VERSION }} > release.json
-        run: sh .github/actions/script.sh
+        run: sh release-scripts/validate-release.sh
