@@ -15,7 +15,7 @@ jobs:
         id: get_version
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
       - name: Install JQ
-        run: apt-get update && apt install -y jq
+        run: sudo apt-get update && sudo apt install -y jq
       - name: Download release info
         #run: curl https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.get_version.outputs.VERSION }} > release.json
         run: curl https://api.github.com/repos/returntocorp/sgrep/releases/latest > release.json
