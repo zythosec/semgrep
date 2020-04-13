@@ -18,6 +18,6 @@ jobs:
         run: sudo apt-get update && sudo apt install -y jq
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Download release info
+      - name: Validate the release
         #run: curl https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.get_version.outputs.VERSION }} > release.json
         run: sh release-scripts/validate-release.sh
