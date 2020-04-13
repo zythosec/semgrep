@@ -22,9 +22,9 @@ jobs:
       - name: Verify something that looks like release notes
         run: cat release.json | jq '.body' | grep "Changed"
       - name: Save release name to a file
-        run: cat release.json | jq '.tag_name' > version
+        run: cat release.json | jq -r '.tag_name' > version
       - name: Show binaries
-        run: cat release.json | jq '.assets[].name' 
+        run: cat release.json | jq -r '.assets[].name' 
       - name: Show version
         run: echo $(cat version)
       - name: Verify ubuntu binary exists
