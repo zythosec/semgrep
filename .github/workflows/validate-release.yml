@@ -14,7 +14,12 @@ jobs:
       - name: Get the version
         id: get_version
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
-      - name: Verify release exists
-        run: curl -I https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.VERSION }} | head -n 1 | grep "200 OK"
+      - name: Install JQ
+        run: apt-get update && apt install -y jq
+      - name: Download release info
+        #run: curl https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.get_version.outputs.VERSION }} > release.json
+        run: curl https://api.github.com/repos/returntocorp/sgrep/releases/latest > release.json
       - name: Verify something that looks like release notes
-        run: curl https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.VERSION }} | grep "Changed"
+        run: cat release.json | jq '.body' | grep "Changed"
+      - name: Verify ubuntu binary exists
+        run: cat release.json | jq '.assets[].name' | grep "sgrep-${{ steps.get_version.ouputs.VERSION}}-ubuntu-16.04.tgz"
