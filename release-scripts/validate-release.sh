@@ -9,10 +9,20 @@ cat release.json | jq -r '.tag_name' | sed 's/^v//' > version
 cat release.json | jq -r '.assets[].name'
 echo "Looking for version: $(cat version)"
 
-# Look for ubuntu binary
+echo "Looking for ubuntu binary"
 cat release.json | jq '.assets[].name' | grep "sgrep-$(cat version)-ubuntu-16.04.tgz"
 
-# Look for OSX binary
+echo "Looking for ubuntu checksum"
+cat release.json | jq '.assets[].name' | grep "sgrep-$(cat version)-ubuntu-16.04.tgz.sha256"
+
+echo "Looking for OSX binary"
 cat release.json | jq '.assets[].name' | grep "sgrep-$(cat version)-osx.zip"
 
+echo "Validating Ubuntu checksum"
+SHA_URL=$(cat release.json | jq -r '.assets[].browser_download_url' | grep "sha256" | grep "16.04")
+RELEASE_URL=$(cat release.json | jq -r '.assets[].browser_download_url' | grep -v "sha256" | grep "16.04")
+
+EXPECTED_SHA=$(curl -L $SHA_URL | awk '{ print $1 }')
+
+curl -L $RELEASE_URL | sha256sum | grep $EXPECTED_SHA
 
