@@ -15,4 +15,4 @@ jobs:
         id: get_version
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
       - name: Verify release exists
-        run: curl https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.VERSION }} 
+        run: curl -I https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.VERSION }} | head -n 1 | grep "200 OK"
