@@ -23,11 +23,11 @@ jobs:
   verify_osx_release:
     name: Verify the OSX brew package
     runs-on: osx
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v2
-        - name: Install JQ
-          run: brew install jq
-        - name: Validate the release
-          run: sh release-scripts/validate-osx-release.sh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install JQ
+        run: brew install jq
+      - name: Validate the release
+        run: sh release-scripts/validate-osx-release.sh
 
