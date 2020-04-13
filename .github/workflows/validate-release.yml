@@ -23,5 +23,9 @@ jobs:
         run: cat release.json | jq '.body' | grep "Changed"
       - name: Save release name to a file
         run: cat release.json | jq '.tag_name' > version
+      - name: Show binaries
+        run: cat release.json | jq '.assets[].name' 
+      - name: Show version:
+        run: echo $(cat version)
       - name: Verify ubuntu binary exists
         run: cat release.json | jq '.assets[].name' | grep "sgrep-$(cat version)-ubuntu-16.04.tgz"
