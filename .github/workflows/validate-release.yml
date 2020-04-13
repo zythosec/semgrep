@@ -16,16 +16,8 @@ jobs:
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
       - name: Install JQ
         run: sudo apt-get update && sudo apt install -y jq
+      - name: Checkout
+        uses: actions/checkout@v2
       - name: Download release info
         #run: curl https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.get_version.outputs.VERSION }} > release.json
-        run: curl https://api.github.com/repos/returntocorp/sgrep/releases/latest > release.json
-      - name: Verify something that looks like release notes
-        run: cat release.json | jq '.body' | grep "Changed"
-      - name: Save release name to a file
-        run: cat release.json | jq -r '.tag_name' > version
-      - name: Show binaries
-        run: cat release.json | jq -r '.assets[].name' 
-      - name: Show version
-        run: echo $(cat version)
-      - name: Verify ubuntu binary exists
-        run: cat release.json | jq '.assets[].name' | grep "sgrep-$(cat version)-ubuntu-16.04.tgz"
+        run: sh .github/actions/script.sh
