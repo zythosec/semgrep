@@ -16,3 +16,5 @@ jobs:
         run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
       - name: Verify release exists
         run: curl -I https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.VERSION }} | head -n 1 | grep "200 OK"
+      - name: Verify something that looks like release notes
+        run: curl https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.VERSION }} | grep "Changed"
