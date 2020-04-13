@@ -21,5 +21,7 @@ jobs:
         run: curl https://api.github.com/repos/returntocorp/sgrep/releases/latest > release.json
       - name: Verify something that looks like release notes
         run: cat release.json | jq '.body' | grep "Changed"
+      - name: Save release name to a file
+        run: cat release.json | jq '.tag_name' > version
       - name: Verify ubuntu binary exists
-        run: cat release.json | jq '.assets[].name' | grep "sgrep-${{ steps.get_version.ouputs.VERSION}}-ubuntu-16.04.tgz"
+        run: cat release.json | jq '.assets[].name' | grep "sgrep-$(cat version)-ubuntu-16.04.tgz"
