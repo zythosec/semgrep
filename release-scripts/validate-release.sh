@@ -1,3 +1,4 @@
+#!/bin/bash
 set -eox
 curl https://api.github.com/repos/returntocorp/sgrep/releases/latest > release.json
 

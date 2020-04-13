@@ -2,7 +2,7 @@ on:
   push:
     # Sequence of patterns matched against refs/tags
     tags:
-    - 'c*' # Push events to matching v*, i.e. v1.0, v20.15.10
+    - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
 
 name: Validate a release
 
@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Validate the release
-        run: sh release-scripts/validate-release.sh
+        run: ./release-scripts/validate-release.sh
   verify_osx_release:
     name: Verify the OSX brew package
     runs-on: macos-latest
@@ -29,5 +29,5 @@ jobs:
       - name: Install JQ
         run: brew install jq
       - name: Validate the release
-        run: sh release-scripts/validate-osx-release.sh
+        run: ./release-scripts/validate-osx-release.sh
 
