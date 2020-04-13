@@ -19,5 +19,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Validate the release
-        #run: curl https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.get_version.outputs.VERSION }} > release.json
         run: sh release-scripts/validate-release.sh
+  verify_osx_release:
+    name: Verify the OSX brew package
+    runs-on: osx
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install JQ
+        run: brew install jq
+      - name: Validate the release
+        run: sh release-scripts/validate-osx-release.sh
+
