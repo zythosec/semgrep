@@ -22,7 +22,7 @@ jobs:
         run: sh release-scripts/validate-release.sh
   verify_osx_release:
     name: Verify the OSX brew package
-    runs-on: osx
+    runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v2
