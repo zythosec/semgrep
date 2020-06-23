@@ -5,6 +5,7 @@ import multiprocessing
 import re
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -367,16 +368,26 @@ class CoreRunner:
 
         # cf. for bar_format: https://tqdm.github.io/docs/tqdm/
         with tempfile.TemporaryDirectory() as semgrep_core_ast_cache_dir:
-            for rule in progress_bar(
-                rules, bar_format="{l_bar}{bar}|{n_fmt}/{total_fmt}"
-            ):
-                debug_tqdm_write(f"Running rule {rule._raw.get('id')}")
-                rule_matches, debugging_steps, errors = self._run_rule(
-                    rule, target_manager, semgrep_core_ast_cache_dir
-                )
-                findings_by_rule[rule] = rule_matches
-                debugging_steps_by_rule[rule] = debugging_steps
-                all_errors.extend(errors)
+            # for rule in progress_bar(
+            #    rules, bar_format="{l_bar}{bar}|{n_fmt}/{total_fmt}"
+            # ):
+            with ThreadPoolExecutor(max_workers=4) as executor:
+
+                def go_fast(rule: Rule):
+                    debug_tqdm_write(f"Running rule {rule._raw.get('id')}")
+                    rule_matches, debugging_steps, errors = self._run_rule(
+                        rule, target_manager, semgrep_core_ast_cache_dir
+                    )
+                    # findings_by_rule[rule] = rule_matches
+                    # debugging_steps_by_rule[rule] = debugging_steps
+                    # all_errors.extend(errors)
+                    return rule, rule_matches, debugging_steps, errors
+
+                results = executor.map(go_fast, rules)
+            for result in results:
+                findings_by_rule[result[0]] = result[1]
+                debugging_steps_by_rule[result[0]] = result[2]
+                all_errors.extend(result[3])
 
         all_errors = dedup_errors(all_errors)
         return findings_by_rule, debugging_steps_by_rule, all_errors
