@@ -47,6 +47,10 @@ class PatternMatch:
             self.vars,
         )
 
+    @path.setter
+    def path(self, new_path: Path) -> None:
+        self._raw_json["path"] = str(new_path)
+
     @property
     def start(self) -> Dict[str, Any]:
         # https://docs.r2c.dev/en/latest/api/output.html does not support offset at the moment

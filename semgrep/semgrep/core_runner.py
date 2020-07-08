@@ -1,4 +1,5 @@
 import collections
+import dataclasses
 import functools
 import hashlib
 import itertools
@@ -61,6 +62,7 @@ def md5_hash(fname: Path) -> str:
         for chunk in iter(lambda: f.read(4096), b""):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
+
 
 MD5_CACHE_DIR = "/tmp/semgrep-cache.pickle"
 # this one is persisted
@@ -386,15 +388,39 @@ class CoreRunner:
                     )
                     for m in new_matches:
                         by_path[m.path].append(m)
-                    for path, matches in by_path.items():
-                        debug_print(f"wrote {len(matches)} matches to cache for {path}")
-                        semgrep_md5_hash[rules_hash][paths_to_md5[path]] = matches
+                    for ran_on_target in non_cached_targets:
+                        if ran_on_target in by_path:
+                            debug_print(f"wrote matches to cache for {ran_on_target}")
+                            semgrep_md5_hash[rules_hash][
+                                paths_to_md5[ran_on_target]
+                            ] = by_path[ran_on_target]
+                        else:
+                            # no hits for this path -- cache that fact
+                            semgrep_md5_hash[rules_hash][
+                                paths_to_md5[ran_on_target]
+                            ] = []
                 else:
                     debug_print("used cache")
 
+                # two files can have the same checksum, so it's important to restore the
+                # path name of a content-addressed lookup
+                def rewrite_paths(
+                    new_path: Path, matches: List[PatternMatch]
+                ) -> List[PatternMatch]:
+                    for m in matches:
+                        m.path = new_path
+                        yield m
+
+                for fname in targets:
+                    assert (
+                        paths_to_md5[fname] in semgrep_md5_hash[rules_hash]
+                    ), f"{fname} {rules_hash}"
+
                 cached_matches = flatten(
                     [
-                        semgrep_md5_hash[rules_hash][paths_to_md5[fname]]
+                        rewrite_paths(
+                            fname, semgrep_md5_hash[rules_hash][paths_to_md5[fname]]
+                        )
                         for fname in targets
                     ]
                 )
