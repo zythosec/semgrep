@@ -1,7 +1,11 @@
 import collections
 import functools
+import hashlib
+import itertools
 import json
 import multiprocessing
+import os
+import pickle
 import re
 import subprocess
 import tempfile
@@ -37,9 +41,32 @@ from semgrep.semgrep_types import OPERATORS
 from semgrep.target_manager import TargetManager
 from semgrep.util import debug_print
 from semgrep.util import debug_tqdm_write
+from semgrep.util import default_dict_dict_of_list
+from semgrep.util import flatten
 from semgrep.util import partition
 from semgrep.util import progress_bar
 from semgrep.util import sub_run
+
+
+def git_hash(fname: Path) -> str:
+    args = ["rev-parse", f"HEAD:{fname}"]
+    hash = subprocess.check_output("git", args)
+    print(hash, args)
+    return hash.strip()
+
+
+def md5_hash(fname: Path) -> str:
+    hash_md5 = hashlib.md5()
+    with open(fname, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+MD5_CACHE_DIR = "/tmp/semgrep-cache.pickle"
+# this one is persisted
+semgrep_md5_hash: Dict[str, Dict[str, List[Any]]] = default_dict_dict_of_list()
+# this one is not persisted, as we assume path contents could change between runs
+paths_to_md5: Dict[Path, str] = {}
 
 
 def _offset_to_line_no(offset: int, buff: str) -> int:
@@ -281,55 +308,98 @@ class CoreRunner:
             ) as target_file, tempfile.NamedTemporaryFile(
                 "w"
             ) as equiv_file:
+
                 yaml = YAML()
                 yaml.dump({"rules": patterns_json}, pattern_file)
                 pattern_file.flush()
-                target_file.write("\n".join(str(t) for t in targets))
-                target_file.flush()
 
-                cmd = [SEMGREP_PATH] + [
-                    "-lang",
-                    language,
-                    "-rules_file",
-                    pattern_file.name,
-                    "-j",
-                    str(self._jobs),
-                    "-target_file",
-                    target_file.name,
-                    "-use_parsing_cache",
-                    cache_dir,
-                ]
-
-                if equivalences:
-                    self._write_equivalences_file(equiv_file, equivalences)
-                    cmd += ["-equivalences", equiv_file.name]
-
-                core_run = sub_run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-                debug_print(core_run.stderr.decode("utf-8", "replace"))
-
-                if core_run.returncode != 0:
-                    # see if semgrep output a JSON error that we can decode
-                    semgrep_output = core_run.stdout.decode("utf-8", "replace")
-                    try:
-                        output_json = json.loads(semgrep_output)
-                    except ValueError:
-                        raise SemgrepError(
-                            f"unexpected non-json output while invoking semgrep-core:\n{PLEASE_FILE_ISSUE_TEXT}"
-                        )
-
-                    if "error" in output_json:
-                        self._raise_semgrep_error_from_json(output_json, patterns)
-                    else:
-                        raise SemgrepError(
-                            f"unexpected json output while invoking semgrep-core:\n{PLEASE_FILE_ISSUE_TEXT}"
-                        )
-
-                output_json = json.loads((core_run.stdout.decode("utf-8", "replace")))
-                errors.extend(
-                    CoreException.from_json(e, language) for e in output_json["errors"]
+                rules_hash = md5_hash(Path(pattern_file.name))
+                non_cached_targets = []
+                for target in targets:
+                    if not target in paths_to_md5:
+                        paths_to_md5[target] = md5_hash(target)
+                    if not paths_to_md5[target] in semgrep_md5_hash[rules_hash]:
+                        non_cached_targets.append(target)
+                debug_print(
+                    f"rulehash: {rules_hash} non-cached targets: {len(non_cached_targets)}"
                 )
-                outputs.extend(PatternMatch(m) for m in output_json["matches"])
+
+                if len(non_cached_targets):
+
+                    target_file.write("\n".join(str(t) for t in non_cached_targets))
+                    target_file.flush()
+
+                    cmd = [SEMGREP_PATH] + [
+                        "-lang",
+                        language,
+                        "-rules_file",
+                        pattern_file.name,
+                        "-j",
+                        str(self._jobs),
+                        "-target_file",
+                        target_file.name,
+                        "-use_parsing_cache",
+                        cache_dir,
+                    ]
+
+                    if equivalences:
+                        self._write_equivalences_file(equiv_file, equivalences)
+                        cmd += ["-equivalences", equiv_file.name]
+
+                    core_run = sub_run(
+                        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                    )
+
+                    debug_print(core_run.stderr.decode("utf-8", "replace"))
+
+                    if core_run.returncode != 0:
+                        # see if semgrep output a JSON error that we can decode
+                        semgrep_output = core_run.stdout.decode("utf-8", "replace")
+                        try:
+                            output_json = json.loads(semgrep_output)
+                        except ValueError:
+                            raise SemgrepError(
+                                f"unexpected non-json output while invoking semgrep-core:\n{PLEASE_FILE_ISSUE_TEXT}"
+                            )
+
+                        if "error" in output_json:
+                            self._raise_semgrep_error_from_json(output_json, patterns)
+                        else:
+                            raise SemgrepError(
+                                f"unexpected json output while invoking semgrep-core:\n{PLEASE_FILE_ISSUE_TEXT}"
+                            )
+
+                    output_json = json.loads(
+                        (core_run.stdout.decode("utf-8", "replace"))
+                    )
+                    errors.extend(
+                        CoreException.from_json(e, language)
+                        for e in output_json["errors"]
+                    )
+                    new_matches: List[PatternMatch] = [
+                        PatternMatch(m) for m in output_json["matches"]
+                    ]
+                    debug_print("invoked")
+                    # now use the cache
+                    by_path: Dict[Path, List[PatternMatch]] = collections.defaultdict(
+                        list
+                    )
+                    for m in new_matches:
+                        by_path[m.path].append(m)
+                    for path, matches in by_path.items():
+                        debug_print(f"wrote {len(matches)} matches to cache for {path}")
+                        semgrep_md5_hash[rules_hash][paths_to_md5[path]] = matches
+                else:
+                    debug_print("used cache")
+
+                cached_matches = flatten(
+                    [
+                        semgrep_md5_hash[rules_hash][paths_to_md5[fname]]
+                        for fname in targets
+                    ]
+                )
+                outputs.extend(cached_matches)
+                # print(outputs)
 
         # group output; we want to see all of the same rule ids on the same file path
         by_rule_index: Dict[
@@ -394,9 +464,19 @@ class CoreRunner:
         """
         start = datetime.now()
 
+        # load md5 cache
+        if os.path.exists(MD5_CACHE_DIR):
+            global semgrep_md5_hash
+            semgrep_md5_hash = pickle.load(open(MD5_CACHE_DIR, "rb"))
+            debug_print(f"loaded {len(semgrep_md5_hash)} entries from {MD5_CACHE_DIR}")
+
         findings_by_rule, debug_steps_by_rule, errors = self._run_rules(
             rules, target_manager
         )
+
+        # Flush md5 cache
+        pickle.dump(semgrep_md5_hash, open(MD5_CACHE_DIR, "wb"))
+        debug_print(f"wrote cache with {len(semgrep_md5_hash)} entries")
 
         debug_print(f"semgrep ran in {datetime.now() - start}")
 

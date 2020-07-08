@@ -1,3 +1,4 @@
+import collections
 import itertools
 import os
 import re
@@ -6,6 +7,7 @@ import sys
 import typing
 from typing import Any
 from typing import Callable
+from typing import Dict
 from typing import IO
 from typing import Iterable
 from typing import List
@@ -157,3 +159,11 @@ def compute_semgrep_path() -> str:
         if os.path.exists(relative_path):
             exec_name = relative_path
     return exec_name
+
+
+def default_dict_of_list() -> Dict[Any, List[Any]]:
+    return collections.defaultdict(list)
+
+
+def default_dict_dict_of_list() -> Dict[Any, Dict[Any, List[Any]]]:
+    return collections.defaultdict(default_dict_of_list)
