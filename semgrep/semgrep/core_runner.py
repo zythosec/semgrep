@@ -41,6 +41,7 @@ from semgrep.semgrep_types import Language
 from semgrep.semgrep_types import OPERATORS
 from semgrep.target_manager import TargetManager
 from semgrep.util import debug_print
+from semgrep.content_hash_store import ContentHashStore
 from semgrep.util import debug_tqdm_write
 from semgrep.util import default_dict_dict_of_list
 from semgrep.util import flatten
@@ -48,28 +49,8 @@ from semgrep.util import partition
 from semgrep.util import progress_bar
 from semgrep.util import sub_run
 
-
-def git_hash(fname: Path) -> str:
-    args = ["rev-parse", f"HEAD:{fname}"]
-    hash = subprocess.check_output("git", args)
-    print(hash, args)
-    return hash.strip()
-
-
-def md5_hash(fname: Path) -> str:
-    hash_md5 = hashlib.md5()
-    with open(fname, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_md5.update(chunk)
-    return hash_md5.hexdigest()
-
-
-MD5_CACHE_DIR = "/tmp/semgrep-cache.pickle"
-# this one is persisted
-semgrep_md5_hash: Dict[str, Dict[str, List[Any]]] = default_dict_dict_of_list()
 # this one is not persisted, as we assume path contents could change between runs
 paths_to_md5: Dict[Path, str] = {}
-
 
 def _offset_to_line_no(offset: int, buff: str) -> int:
     """
@@ -247,7 +228,7 @@ class CoreRunner:
         fp.flush()
 
     def _run_rule(
-        self, rule: Rule, target_manager: TargetManager, cache_dir: str
+        self, rule: Rule, target_manager: TargetManager, cache_dir: str, content_hash_store: ContentHashStore
     ) -> Tuple[List[RuleMatch], List[Dict[str, Any]], List[CoreException]]:
         """
             Run all rules on targets and return list of all places that match patterns, ... todo errors
@@ -315,12 +296,12 @@ class CoreRunner:
                 yaml.dump({"rules": patterns_json}, pattern_file)
                 pattern_file.flush()
 
-                rules_hash = md5_hash(Path(pattern_file.name))
+                rules_hash = ContentHashStore.md5_hash(Path(pattern_file.name))
                 non_cached_targets = []
                 for target in targets:
                     if not target in paths_to_md5:
-                        paths_to_md5[target] = md5_hash(target)
-                    if not paths_to_md5[target] in semgrep_md5_hash[rules_hash]:
+                        paths_to_md5[target] = ContentHashStore.git_hash(target)
+                    if not content_hash_store.contains(paths_to_md5[target], rules_hash):
                         non_cached_targets.append(target)
                 debug_print(
                     f"rulehash: {rules_hash} non-cached targets: {len(non_cached_targets)}"
@@ -391,14 +372,10 @@ class CoreRunner:
                     for ran_on_target in non_cached_targets:
                         if ran_on_target in by_path:
                             debug_print(f"wrote matches to cache for {ran_on_target}")
-                            semgrep_md5_hash[rules_hash][
-                                paths_to_md5[ran_on_target]
-                            ] = by_path[ran_on_target]
+                            content_hash_store.save_entry(paths_to_md5[ran_on_target], rules_hash, by_path[ran_on_target])                            
                         else:
                             # no hits for this path -- cache that fact
-                            semgrep_md5_hash[rules_hash][
-                                paths_to_md5[ran_on_target]
-                            ] = []
+                            content_hash_store.save_entry(paths_to_md5[ran_on_target], rules_hash, [])                            
                 else:
                     debug_print("used cache")
 
@@ -411,15 +388,16 @@ class CoreRunner:
                         m.path = new_path
                         yield m
 
-                for fname in targets:
-                    assert (
-                        paths_to_md5[fname] in semgrep_md5_hash[rules_hash]
-                    ), f"{fname} {rules_hash}"
+                # TODO remove
+                #for fname in targets:
+                #    assert (
+                #        paths_to_md5[fname] in content_hash_store(rules_hash)
+                #    ), f"{fname} {rules_hash}"
 
                 cached_matches = flatten(
                     [
                         rewrite_paths(
-                            fname, semgrep_md5_hash[rules_hash][paths_to_md5[fname]]
+                            fname, content_hash_store.load_entry(paths_to_md5[fname], rules_hash)
                         )
                         for fname in targets
                     ]
@@ -452,7 +430,7 @@ class CoreRunner:
         return findings, debugging_steps, errors
 
     def _run_rules(
-        self, rules: List[Rule], target_manager: TargetManager
+        self, rules: List[Rule], target_manager: TargetManager, content_hash_store: ContentHashStore
     ) -> Tuple[
         Dict[Rule, List[RuleMatch]],
         Dict[Rule, List[Dict[str, Any]]],
@@ -469,7 +447,7 @@ class CoreRunner:
             ):
                 debug_tqdm_write(f"Running rule {rule._raw.get('id')}")
                 rule_matches, debugging_steps, errors = self._run_rule(
-                    rule, target_manager, semgrep_core_ast_cache_dir
+                    rule, target_manager, semgrep_core_ast_cache_dir, content_hash_store
                 )
                 findings_by_rule[rule] = rule_matches
                 debugging_steps_by_rule[rule] = debugging_steps
@@ -490,21 +468,15 @@ class CoreRunner:
         """
         start = datetime.now()
 
-        # load md5 cache
-        if os.path.exists(MD5_CACHE_DIR):
-            global semgrep_md5_hash
-            semgrep_md5_hash = pickle.load(open(MD5_CACHE_DIR, "rb"))
-            debug_print(f"loaded {len(semgrep_md5_hash)} entries from {MD5_CACHE_DIR}")
+        content_hash_store = ContentHashStore()
 
         findings_by_rule, debug_steps_by_rule, errors = self._run_rules(
-            rules, target_manager
+            rules, target_manager, content_hash_store
         )
 
-        # Flush md5 cache
-        pickle.dump(semgrep_md5_hash, open(MD5_CACHE_DIR, "wb"))
-        debug_print(f"wrote cache with {len(semgrep_md5_hash)} entries")
-
         debug_print(f"semgrep ran in {datetime.now() - start}")
+
+        content_hash_store.flush()
 
         return findings_by_rule, debug_steps_by_rule, errors
 
