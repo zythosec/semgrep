@@ -1,4 +1,5 @@
 import collections
+import time
 import itertools
 import os
 import re
@@ -167,3 +168,6 @@ def default_dict_of_list() -> Dict[Any, List[Any]]:
 
 def default_dict_dict_of_list() -> Dict[Any, Dict[Any, List[Any]]]:
     return collections.defaultdict(default_dict_of_list)
+
+def print_time(start_t: float):
+    return str(round(time.time() - start_t, 2))

@@ -1,5 +1,6 @@
 import collections
 import dataclasses
+import time
 import functools
 import hashlib
 import itertools
@@ -21,6 +22,7 @@ from typing import Optional
 from typing import Tuple
 
 from ruamel.yaml import YAML
+from semgrep.util import default_dict_dict_of_list, print_time
 
 from semgrep.constants import PLEASE_FILE_ISSUE_TEXT
 from semgrep.constants import SEMGREP_PATH
@@ -296,15 +298,21 @@ class CoreRunner:
                 yaml.dump({"rules": patterns_json}, pattern_file)
                 pattern_file.flush()
 
+                start_t = time.time()
                 rules_hash = ContentHashStore.md5_hash(Path(pattern_file.name))
                 non_cached_targets = []
+                need_hashes = [target for target in targets if target not in paths_to_md5]
+                for fname, fhash in ContentHashStore.git_hashes(need_hashes):
+                    paths_to_md5[fname] = fhash
+
                 for target in targets:
-                    if not target in paths_to_md5:
-                        paths_to_md5[target] = ContentHashStore.git_hash(target)
+                    #if not target in paths_to_md5:
+                    #    paths_to_md5[target] = ContentHashStore.git_hash(target)
                     if not content_hash_store.contains(paths_to_md5[target], rules_hash):
                         non_cached_targets.append(target)
+
                 debug_print(
-                    f"rulehash: {rules_hash} non-cached targets: {len(non_cached_targets)}"
+                    f"rulehash: {rules_hash} non-cached targets: {len(non_cached_targets)}...hashed in {print_time(start_t)}s"
                 )
 
                 if len(non_cached_targets):
@@ -469,6 +477,7 @@ class CoreRunner:
         start = datetime.now()
 
         content_hash_store = ContentHashStore()
+        content_hash_store.load()
 
         findings_by_rule, debug_steps_by_rule, errors = self._run_rules(
             rules, target_manager, content_hash_store
