@@ -153,6 +153,7 @@ class CoreRunner:
         by_lang: Dict[Language, List[Pattern]] = collections.defaultdict(list)
         if rule.mode == TAINT_MODE:
             for lang in rule.languages:
+                # TODO: make this list actually contain a list of patterns and reuse more search-mode code
                 by_lang[lang] = []
         else:
             # a rule can have multiple patterns inside it. Flatten these so we can send semgrep a single yml file list of patterns
