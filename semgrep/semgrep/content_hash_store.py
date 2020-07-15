@@ -55,6 +55,7 @@ class ContentHashStore(object):
     def flush(self):
         # TODO get a lock on the file
         start_t = time.time()
+        Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
         with open(self.cache_path, 'wb') as fout:
             pickle.dump(self.semgrep_md5_hash, fout)
         debug_print(f'wrote {len(self.semgrep_md5_hash)} cache entries...in {print_time(start_t)}s')
