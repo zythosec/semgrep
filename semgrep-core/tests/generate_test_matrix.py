@@ -144,7 +144,7 @@ def run_semgrep_on_example(lang: str, config_arg_str: str, code_path: str) -> st
             print(output.stderr.decode("utf-8"))
             return output.stdout.decode("utf-8")
         else:
-            print("ERROR: " + output.returncode)
+            print(f"ERROR: {output.returncode}")
             print(cmd)
             sys.exit(1)
 
