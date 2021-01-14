@@ -64,6 +64,9 @@ let dump_ast_pfff file =
 (* less: could infer lang from filename *)
 let dump_tree_sitter_cst_lang lang file =
   match lang with
+  | Lang.R ->
+      Tree_sitter_r.Parse.file file
+      |> dump_and_print_errors Tree_sitter_r.CST.dump_tree
   | Lang.Ruby ->
       Tree_sitter_ruby.Parse.file file
       |> dump_and_print_errors Tree_sitter_ruby.CST.dump_tree
@@ -88,7 +91,6 @@ let dump_tree_sitter_cst_lang lang file =
   | Lang.Lua ->
       Tree_sitter_lua.Parse.file file
       |> dump_and_print_errors Tree_sitter_lua.CST.dump_tree
-
   | Lang.C ->
       Tree_sitter_c.Parse.file file
       |> dump_and_print_errors Tree_sitter_c.CST.dump_tree
@@ -122,6 +124,9 @@ let test_parse_tree_sitter lang xs =
       (try
          (match lang with
           (* less: factorize with dump_tree_sitter_cst_lang *)
+          | Lang.R ->
+              Tree_sitter_r.Parse.file file
+              |> fail_on_error |> ignore
           | Lang.Ruby ->
               Tree_sitter_ruby.Parse.file file
               |> fail_on_error |> ignore
